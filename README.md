@@ -1,6 +1,5 @@
 # Movie Theaters per 100k People by State (2023)
 
-Link to my map: ADD YOUR GITHUB PAGES LINK HERE
 
 By Joshua Turner
 
@@ -12,8 +11,8 @@ The states with the most theaters per person are mostly rural states in the midd
 
 ## Data
 
-- Number of theaters: Census County Business Patterns 2023, NAICS code 512131 (movie theaters, not counting drive-ins)
-- Population: Census ACS 2023 1-Year estimates, table B01003
+- Number of theaters: Census County Business Patterns 2023, (movie theaters, not counting drive-ins)
+- Population: Census ACS 2023 1-Year estimates
 - State shapes: Census cb_2023_us_state_20m
 
 To get theaters per 100k I did theaters / population x 100,000. Then I joined the data to the state shapes in mapshaper and exported it as theaters.geojson. It has all 50 states and DC.
@@ -32,7 +31,7 @@ I picked these numbers so each class has a decent amount of states in it and the
 
 ## Design
 
-I made the background plain dark gray with no basemap so the states stand out. I made the state borders light gray so the dark blue states don't blend into the background.
+I made the background plain dark gray with no base-map so the states stand out. I made the state borders light gray so the dark blue states don't blend into the background.
 
 On a normal web map Alaska looks huge because it's so far north, so I moved Alaska and Hawaii down below the lower 48 and resized them. This way the whole country fits on the screen and the lower 48 aren't tiny.
 
