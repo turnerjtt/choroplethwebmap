@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html>
+  <head>
+
+    <title>Movie Theaters per 100k by State</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.0/dist/leaflet.css"/>
+
+    <style>
+html { height: 100%; }
+
+body {
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  background: #1a1a1a;
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+  background: #2b2b2b;
+}
+
+/* shared look for the three boxes on top of the dark map */
+.title, .info, .legend {
+  z-index: 1000;
+  position: absolute;
+  padding: 8px 10px;
+  font: 14px Arial, Helvetica, sans-serif;
+  color: #eeeeee;
+  background: rgba(30, 30, 30, 0.85);
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+  border-radius: 5px;
+}
+
+.title {
+  /* centered at the top, over the empty space above the U.S. */
+  left: 50%;
+  transform: translateX(-50%);
+  top: 10px;
+  max-width: 340px;
+  text-align: center;
+}
+
+.title h2 {
+  font-size: 16px;
+  margin: 0 0 6px;
+  color: #9ecae1;
+}
+
+.title p {
+  margin: 4px 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.title a { color: #6baed6; }
+
+.info {
+  right: 10px;
+  top: 10px;
+  text-align: right;
+}
+
+.info h4 {
+  font-size: 15px;
+  margin: 0 0 5px;
+  color: #bbbbbb;
+}
+
+.legend {
+  right: 10px;
+  bottom: 30px;
+  line-height: 20px;
+}
+
+.legend i {
+  width: 18px;
+  height: 16px;
+  float: left;
+  margin: 2px 8px 0 0;
+  opacity: 0.8;
+}
+    </style>
+
+    <script src="https://unpkg.com/leaflet@1.7.0/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-ajax/2.1.0/leaflet.ajax.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chroma-js/1.3.4/chroma.min.js"></script>
+
+  </head>
+<body>
+<div id='map'></div>
+
+<div class='title'>
+  <h2>Movie Theaters per 100,000 People (2023)</h2>
+  <p>Indoor movie theaters for every 100,000 people in each state. Rural states like Wyoming and the Dakotas have the most per person. Hover or click a state for details.</p>
+  <p><b>Author:</b> Joshua Turner</p>
+  <p><b>Data:</b> U.S. Census Bureau, <a href="https://www.census.gov/data/datasets/2023/econ/cbp/2023-cbp.html" target="_blank">County Business Patterns 2023</a> and <a href="https://www.census.gov/programs-surveys/acs.html" target="_blank">ACS 2023 population</a></p>
+</div>
+
+<div class='legend'></div>
+
+    <script>
+
+// 1. create the map object. no base layer, just a plain dark gray background.
+// limit how far you can zoom and pan so the map stays on the U.S.
+var map = L.map('map', {
+  zoomSnap: 0.25,
+  maxZoom: 7,
+  maxBounds: [[-10, -230], [85, -10]],
+  maxBoundsViscosity: 1.0
+});
+
+// fit the whole U.S. on screen. Alaska and Hawaii get moved down below
+// the lower 48 (see section 3.4). leave room at the top for the title box.
+map.fitBounds([[15, -130], [50, -66]], { paddingTopLeft: [0, 90] });
+
+// don't let the user zoom out farther than the starting view
+map.setMinZoom(map.getZoom());
+
+// 2. set up the choropleth classes and colors.
+// five classes of theaters per 100k people (values range from 0.69 to 4.11)
+var grades = [0, 1.0, 1.3, 1.6, 2.5];
+
+// five-class Blues sequential color ramp from ColorBrewer
+var colors = chroma.scale('Blues').colors(grades.length);
+
+// get the color based on the class of the input value
+function getColor(d) {
+  for (var i = 0; i < grades.length - 1; i++) {
+    if (d >= grades[i] && d < grades[i + 1]) return colors[i];
+  }
+  return colors[grades.length - 1]; // the last class (2.5+)
+}
+
+function style(feature) {
+  return {
+    weight: 1,
+    opacity: 1,
+    color: '#aaaaaa',
+    fillOpacity: 0.8,
+    fillColor: getColor(feature.properties.Per100k)
+  };
+}
+
+// 3. hover info box in the top right.
+var geojson = null;
+
+var info = L.control();
+
+info.onAdd = function (map) {
+  this._div = L.DomUtil.create('div', 'info');
+  this.update();
+  return this._div;
+};
+
+info.update = function (props) {
+  this._div.innerHTML = '<h4>Theaters per 100k People</h4>' + (props ?
+    '<b>' + props.NAME + '</b><br />' + props.Per100k + ' theaters per 100k'
+    : 'Hover over a state');
+};
+
+info.addTo(map);
+
+// 3.1 highlight a state when the mouse hovers on it.
+function highlightFeature(e) {
+  var layer = e.target;
+  layer.setStyle({
+    weight: 3,
+    color: '#ffffff',
+    fillOpacity: 0.9
+  });
+  layer.bringToFront();
+  info.update(layer.feature.properties);
+}
+
+// 3.2 reset the highlighted state when the mouse leaves it.
+function resetHighlight(e) {
+  geojson.resetStyle(e.target);
+  info.update();
+}
+
+// 3.3 add the hover events and a popup to each state.
+function onEachFeature(feature, layer) {
+  var p = feature.properties;
+  layer.bindPopup(
+    '<b>' + p.NAME + '</b><br />' +
+    'Theaters: ' + p.Theaters + '<br />' +
+    'Population: ' + p.Population.toLocaleString() + '<br />' +
+    'Theaters per 100k: ' + p.Per100k
+  );
+  layer.on({
+    mouseover: highlightFeature,
+    mouseout: resetHighlight
+  });
+}
+
+// 3.4 move and resize Alaska and Hawaii so they sit below the lower 48.
+// on a web map Alaska looks way too big because it is so far north,
+// so it gets shrunk down. Hawaii gets moved closer and a little bigger.
+function moveState(geometry, fromLon, fromLat, toLon, toLat, scaleLon, scaleLat) {
+  var polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
+  polygons.forEach(function (polygon) {
+    polygon.forEach(function (ring) {
+      ring.forEach(function (point) {
+        // some Alaska islands cross the 180 line, so put them on the same side
+        if (point[0] > 0) point[0] -= 360;
+        point[0] = toLon + (point[0] - fromLon) * scaleLon;
+        point[1] = toLat + (point[1] - fromLat) * scaleLat;
+      });
+    });
+  });
+}
+
+function moveAlaskaHawaii(data) {
+  data.features.forEach(function (feature) {
+    if (feature.properties.STUSPS === 'AK') {
+      moveState(feature.geometry, -159, 61, -120, 22.5, 0.31, 0.61);
+    }
+    if (feature.properties.STUSPS === 'HI') {
+      moveState(feature.geometry, -157.4, 20.6, -104, 24, 1.2, 1.2);
+    }
+  });
+  return data;
+}
+
+// 3.5 load the GeoJSON data and add it to the map.
+geojson = L.geoJson.ajax("assets/theaters.geojson", {
+  middleware: moveAlaskaHawaii,
+  style: style,
+  onEachFeature: onEachFeature
+}).addTo(map);
+
+// 4. create the legend.
+var labels = ['<b>Theaters per 100k</b>'];
+// the first class starts at "less than" since no state is near 0
+labels.push('<i style="background:' + colors[0] + '"></i> Less than ' + grades[1].toFixed(1));
+for (var i = 1; i < grades.length - 1; i++) {
+  labels.push('<i style="background:' + colors[i] + '"></i> ' + grades[i].toFixed(1) + ' &ndash; ' + grades[i + 1].toFixed(1));
+}
+labels.push('<i style="background:' + colors[grades.length - 1] + '"></i> ' + grades[grades.length - 1].toFixed(1) + ' +');
+$(".legend").html(labels.join('<br>'));
+
+// 5. add the data credit.
+map.attributionControl.addAttribution('Data &copy; <a href="https://www.census.gov/">US Census Bureau</a>');
+
+    </script>
+
+</body>
+</html>
